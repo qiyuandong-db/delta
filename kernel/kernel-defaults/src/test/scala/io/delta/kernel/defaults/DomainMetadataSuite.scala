@@ -22,6 +22,8 @@ import io.delta.kernel.exceptions._
 import io.delta.kernel.internal.{SnapshotImpl, TableImpl, TransactionBuilderImpl}
 import io.delta.kernel.internal.actions.{DomainMetadata, Protocol, SingleAction}
 import io.delta.kernel.internal.util.Utils.toCloseableIterator
+import io.delta.kernel.internal.rowtracking.RowTrackingMetadataDomain
+import io.delta.kernel.internal.metadatadomain.{JsonMetadataDomain, JsonMetadataDomainUtils}
 import io.delta.kernel.utils.CloseableIterable.{emptyIterable, inMemoryIterable}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.delta.DeltaLog
@@ -468,6 +470,53 @@ class DomainMetadataSuite extends DeltaTableWriteSuiteBase with ParquetSuiteBase
           Map("testDomain1" -> dm1, "testDomain2" -> dm2, "testDomain3" -> dm3)
         )
       }
+    })
+  }
+
+  test("RowTrackingMetadataDomain is serializable and deserializable") {
+    withTempDirAndEngine((tablePath, engine) => {
+      // Create a RowTrackingMetadataDomain
+      val rowTrackingMetadataDomain = new RowTrackingMetadataDomain(10)
+
+      // Generate a DomainMetadata action from it and verify. Its configuration should be
+      // a JSON serialization of the rowTrackingMetadataDomain
+      val dm = rowTrackingMetadataDomain.toDomainMetadata
+      assert(dm.getDomain === rowTrackingMetadataDomain.getDomainName)
+      assert(dm.getConfiguration === """{"rowIdHighWatermark":10}""")
+
+      // Verify the deserialization from DomainMetadata action into concrete domain object
+      val deserializedDomain = RowTrackingMetadataDomain.fromJsonConfiguration(dm.getConfiguration)
+      assert(deserializedDomain.getDomainName === rowTrackingMetadataDomain.getDomainName)
+      assert(
+        rowTrackingMetadataDomain.getRowIdHighWatermark
+        === deserializedDomain.getRowIdHighWatermark
+      )
+
+      // Verify the domainMetadata can be committed and read back
+      createTableWithDomainMetadataSupported(engine, tablePath)
+      // Commit the domain metadata and verify
+      commitDomainMetadataAndVerify(
+        engine,
+        tablePath,
+        domainMetadatas = Seq(dm),
+        expectedValue = Map(rowTrackingMetadataDomain.getDomainName -> dm)
+      )
+
+      // Read the domain metadata back from the table snapshot
+      val table = Table.forPath(engine, tablePath)
+      val snapshot = table.getLatestSnapshot(engine).asInstanceOf[SnapshotImpl]
+      val rowTrackingMetadataDomainFromSnapshot =
+        RowTrackingMetadataDomain.fromSnapshot(snapshot).get
+
+      // Verify the domain metadata read back from the snapshot
+      assert(
+        rowTrackingMetadataDomain.getDomainName ===
+        rowTrackingMetadataDomainFromSnapshot.getDomainName
+      )
+      assert(
+        rowTrackingMetadataDomain.getRowIdHighWatermark ===
+        rowTrackingMetadataDomainFromSnapshot.getRowIdHighWatermark
+      )
     })
   }
 }
