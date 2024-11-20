@@ -54,10 +54,10 @@ public abstract class JsonMetadataDomain {
    * Retrieves the domain metadata from a snapshot for a given domain, and deserializes it into an
    * instance of the specified metadata domain class.
    *
-   * @param snapshot the snapshot containing the domain metadata
-   * @param clazz the class of the object to deserialize into
+   * @param snapshot the snapshot to read from
+   * @param clazz the metadata domain class of the object to deserialize into
    * @param domainName the name of the domain
-   * @param <T> the type of the object
+   * @param <T> the type of the metadata domain object
    * @return an Optional containing the deserialized object if the domain metadata is found,
    *     otherwise an empty Optional
    */

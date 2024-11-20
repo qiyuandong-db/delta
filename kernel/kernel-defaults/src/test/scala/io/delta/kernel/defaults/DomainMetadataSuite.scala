@@ -482,14 +482,14 @@ class DomainMetadataSuite extends DeltaTableWriteSuiteBase with ParquetSuiteBase
       // a JSON serialization of the rowTrackingMetadataDomain
       val dm = rowTrackingMetadataDomain.toDomainMetadata
       assert(dm.getDomain === rowTrackingMetadataDomain.getDomainName)
-      assert(dm.getConfiguration === """{"rowIdHighWatermark":10}""")
+      assert(dm.getConfiguration === """{"rowIdHighWaterMark":10}""")
 
       // Verify the deserialization from DomainMetadata action into concrete domain object
       val deserializedDomain = RowTrackingMetadataDomain.fromJsonConfiguration(dm.getConfiguration)
       assert(deserializedDomain.getDomainName === rowTrackingMetadataDomain.getDomainName)
       assert(
-        rowTrackingMetadataDomain.getRowIdHighWatermark
-        === deserializedDomain.getRowIdHighWatermark
+        rowTrackingMetadataDomain.getRowIdHighWaterMark
+        === deserializedDomain.getRowIdHighWaterMark
       )
 
       // Verify the domainMetadata can be committed and read back
@@ -514,8 +514,8 @@ class DomainMetadataSuite extends DeltaTableWriteSuiteBase with ParquetSuiteBase
         rowTrackingMetadataDomainFromSnapshot.getDomainName
       )
       assert(
-        rowTrackingMetadataDomain.getRowIdHighWatermark ===
-        rowTrackingMetadataDomainFromSnapshot.getRowIdHighWatermark
+        rowTrackingMetadataDomain.getRowIdHighWaterMark ===
+        rowTrackingMetadataDomainFromSnapshot.getRowIdHighWaterMark
       )
     })
   }

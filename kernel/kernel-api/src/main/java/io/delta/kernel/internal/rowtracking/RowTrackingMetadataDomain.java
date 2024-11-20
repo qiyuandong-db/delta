@@ -46,16 +46,20 @@ public class RowTrackingMetadataDomain extends JsonMetadataDomain {
 
   public static final String DOMAIN_NAME = "delta.rowTracking";
 
-  private long rowIdHighWatermark;
+  /** Default value for row ID high watermark when it is missing in the table */
+  public static final long MISSING_ROW_ID_HIGH_WATERMARK = -1L;
+
+  /** The highest assigned fresh row id for the table */
+  private long rowIdHighWaterMark;
 
   /**
-   * Constructs a RowTrackingMetadataDomain with the specified row ID high watermark.
+   * Constructs a RowTrackingMetadataDomain with the specified row ID high water mark.
    *
-   * @param rowIdHighWatermark the row ID high watermark
+   * @param rowIdHighWaterMark the row ID high water mark
    */
   @JsonCreator
-  public RowTrackingMetadataDomain(@JsonProperty("rowIdHighWatermark") long rowIdHighWatermark) {
-    this.rowIdHighWatermark = rowIdHighWatermark;
+  public RowTrackingMetadataDomain(@JsonProperty("rowIdHighWaterMark") long rowIdHighWaterMark) {
+    this.rowIdHighWaterMark = rowIdHighWaterMark;
   }
 
   @Override
@@ -63,11 +67,11 @@ public class RowTrackingMetadataDomain extends JsonMetadataDomain {
     return DOMAIN_NAME;
   }
 
-  public long getRowIdHighWatermark() {
-    return rowIdHighWatermark;
+  public long getRowIdHighWaterMark() {
+    return rowIdHighWaterMark;
   }
 
-  public void setRowIdHighWatermark(long rowIdHighWatermark) {
-    this.rowIdHighWatermark = rowIdHighWatermark;
+  public void setRowIdHighWaterMark(long rowIdHighWaterMark) {
+    this.rowIdHighWaterMark = rowIdHighWaterMark;
   }
 }
