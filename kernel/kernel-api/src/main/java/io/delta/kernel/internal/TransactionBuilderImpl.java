@@ -15,8 +15,7 @@
  */
 package io.delta.kernel.internal;
 
-import static io.delta.kernel.internal.DeltaErrors.requiresSchemaForNewTable;
-import static io.delta.kernel.internal.DeltaErrors.tableAlreadyExists;
+import static io.delta.kernel.internal.DeltaErrors.*;
 import static io.delta.kernel.internal.TransactionImpl.DEFAULT_READ_VERSION;
 import static io.delta.kernel.internal.TransactionImpl.DEFAULT_WRITE_VERSION;
 import static io.delta.kernel.internal.util.ColumnMapping.isColumnMappingModeEnabled;
@@ -43,6 +42,7 @@ import io.delta.kernel.internal.icebergcompat.IcebergWriterCompatV1MetadataValid
 import io.delta.kernel.internal.metrics.SnapshotMetrics;
 import io.delta.kernel.internal.metrics.SnapshotQueryContext;
 import io.delta.kernel.internal.replay.LogReplay;
+import io.delta.kernel.internal.rowtracking.MaterializedRowTrackingColumn;
 import io.delta.kernel.internal.snapshot.LogSegment;
 import io.delta.kernel.internal.snapshot.SnapshotHint;
 import io.delta.kernel.internal.tablefeatures.TableFeature;
@@ -261,13 +261,28 @@ public class TransactionBuilderImpl implements TransactionBuilder {
       newMetadata = columnMappingMetadata;
     }
 
-    /* ----- 5: Validate the metadata change ----- */
+    /* ----- 5: Update the METADATA with materialized row tracking column name if applicable----- */
+    Optional<Metadata> rowTrackingMetadata =
+        MaterializedRowTrackingColumn.ROW_ID.assignMaterializedColumnNameIfNeeded(
+            newMetadata.orElse(snapshotMetadata), isNewTable);
+    if (rowTrackingMetadata.isPresent()) {
+      newMetadata = rowTrackingMetadata;
+    }
+
+    rowTrackingMetadata =
+        MaterializedRowTrackingColumn.ROW_COMMIT_VERSION.assignMaterializedColumnNameIfNeeded(
+            newMetadata.orElse(snapshotMetadata), isNewTable);
+    if (rowTrackingMetadata.isPresent()) {
+      newMetadata = rowTrackingMetadata;
+    }
+
+    /* ----- 6: Validate the metadata change ----- */
     // Now that all the config and schema changes have been made validate the old vs new metadata
     if (newMetadata.isPresent()) {
       validateMetadataChange(snapshot, snapshotMetadata, newMetadata.get(), isNewTable);
     }
 
-    /* ----- 6: Additional validation and adjustment ----- */
+    /* ----- 7: Additional validation and adjustment ----- */
     List<Column> casePreservingClusteringColumns =
         SchemaUtils.casePreservingEligibleClusterColumns(
             newMetadata.orElse(snapshotMetadata).getSchema(),
@@ -357,6 +372,8 @@ public class TransactionBuilderImpl implements TransactionBuilder {
    *   <li>Column mapping mode can only go from none->name for existing table
    *   <li>icebergWriterCompatV1 cannot be enabled on existing tables (only supported upon table
    *       creation)
+   *   <li>Enabling/disabling row tracking on existing tables is blocked
+   *   <li>Materialized row tracking column names do not conflict with schema
    * </ul>
    */
   private void validateMetadataChange(
@@ -397,6 +414,23 @@ public class TransactionBuilderImpl implements TransactionBuilder {
           oldMetadata.getPartitionColNames(),
           newMetadata);
     }
+
+    // Block enabling/disabling row tracking on existing tables because:
+    // 1. Enabling requires backfilling row IDs/commit versions, which is not supported in Kernel
+    // 2. Disabling is irreversible in Kernel (re-enabling not supported)
+    if (!isNewTable) {
+      boolean oldRowTrackingEnabledValue =
+          TableConfig.ROW_TRACKING_ENABLED.fromMetadata(oldMetadata);
+      boolean newRowTrackingEnabledValue =
+          TableConfig.ROW_TRACKING_ENABLED.fromMetadata(newMetadata);
+      if (oldRowTrackingEnabledValue != newRowTrackingEnabledValue) {
+        throw DeltaErrors.cannotToggleRowTrackingOnExistingTable();
+      }
+    }
+
+    MaterializedRowTrackingColumn.ROW_ID.throwIfColumnNameConflictsWithSchema(newMetadata);
+    MaterializedRowTrackingColumn.ROW_COMMIT_VERSION.throwIfColumnNameConflictsWithSchema(
+        newMetadata);
   }
 
   private class InitialSnapshot extends SnapshotImpl {
